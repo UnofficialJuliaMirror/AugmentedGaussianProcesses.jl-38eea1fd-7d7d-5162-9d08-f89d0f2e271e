@@ -1,8 +1,14 @@
 # Functions related to the Student T likelihood (HGP)
 """Update the local variational parameters of the full batch GP HGP"""
 function local_update!(model::BatchHGP)
-    model.β = 0.5.*(diag(model.Σ)+(model.μ.-model.y).^2 .+model.ν)
-    model.θ = 0.5.*(model.ν.+1.0)./model.β
+    model.λ = 0.5*((model.μ-model.y).^2+diag(model.Σ))
+    model.c = sqrt.(diag(model.Σ_g)+model.μ_g.^2)
+    model.γ = 0.5*model.α*model.λ./cosh.(0.5*model.c).*exp.(-0.5*model.μ_g)
+    model.θ = 0.5.*(model.γ.+1.0)./model.c.*tanh.(0.5*model.c)
+    model.K_g = Symmetric(kernelmatrix(model.X,model.kernel_g)+jittering*I)
+    model.invK_g = inv(model.K_g)
+    model.Σ_g = Symmetric(inv(Diagonal(model.θ)+model.invK_g))
+    model.μ_g = 0.5*model.α*model.Σ_g*(1.0.-model.γ)
 end
 
 # """Update the local variational parameters of the sparse GP HGP"""
@@ -14,8 +20,9 @@ end
 
 """Return the natural gradients of the ELBO given the natural parameters"""
 function natural_gradient(model::BatchHGP)
-    model.η_1 =  model.θ.*model.y
-    model.η_2 = Symmetric(-0.5*(Diagonal{Float64}(model.θ) + model.invK))
+    expec = expectation.(logit,Normal.(model.μ_g,diag(model.Σ_g)))
+    model.η_1 = 0.5*model.α*expec.*model.y
+    model.η_2 = Symmetric(-0.5*(Diagonal{Float64}(expec) + model.invK))
 end
 
 # """Return the natural gradients of the ELBO given the natural parameters"""
@@ -28,9 +35,10 @@ end
 
 """Compute the negative ELBO for the full batch HGP Model"""
 function ELBO(model::BatchHGP)
-    ELBO_v = ExpecLogLikelihood(model)
+    ELBO_v = 0.0
+    # ELBO_v = ExpecLogLikelihood(model)
     ELBO_v += -GaussianKL(model)
-    ELBO_v += -InverseGammaKL(model)
+    # ELBO_v += -InverseGammaKL(model)
     return -ELBO_v
 end
 
@@ -59,35 +67,35 @@ end
 #     return tot
 # end
 
-"""Return the KL divergence for the inverse gamma distributions"""
-function InverseGammaKL(model::GPModel)
-    α_p = β_p = model.ν/2;
-    return (α_p.-model.α)*digamma(α_p).-log(gamma(α_p)).+log(gamma(model.α))
-            .+ model.α*(log(β_p).-log.(model.β)).+α_p.*(model.β.-β_p)./β_p
-end
+# """Return the KL divergence for the inverse gamma distributions"""
+# function InverseGammaKL(model::GPModel)
+#     α_p = β_p = model.ν/2;
+#     return (α_p.-model.α)*digamma(α_p).-log(gamma(α_p)).+log(gamma(model.α))
+#             .+ model.α*(log(β_p).-log.(model.β)).+α_p.*(model.β.-β_p)./β_p
+# end
 
-"""Return a function computing the gradient of the ELBO given the kernel hyperparameters for a HGP Model"""
-function hyperparameter_gradient_function(model::SparseHGP)
-    F2 = Symmetric(model.μ*transpose(model.μ) + model.Σ)
-    θ = Diagonal(model.θ)
-    return (function(Jmm,Jnm,Jnn)
-                ι = (Jnm-model.κ*Jmm)*model.invKmm
-                Jtilde = Jnn - sum(ι.*model.Knm,dims=2)[:] - sum(model.κ.*Jnm,dims=2)[:]
-                V = model.invKmm*Jmm
-                return 0.5*(sum( (V*model.invKmm - model.StochCoeff*(ι'*θ*model.κ + model.κ'*θ*ι)) .* transpose(F2)) - tr(V) - model.StochCoeff*dot(model.θ,Jtilde)
-                    + model.StochCoeff*dot(model.y[model.MBIndices],ι*model.μ))
-            end,
-            function(kernel)
-                return  0.5/(getvariance(kernel))*(sum(model.invKmm.*F2)-model.StochCoeff*dot(model.θ,model.Ktilde)-model.m)
-            end,
-            function()
-                ι = -model.κ*model.invKmm
-                Jtilde = ones(Float64,model.nSamplesUsed) - sum(ι.*model.Knm,dims=2)[:]
-                V = model.invKmm
-                return 0.5*(sum( (V*model.invKmm - model.StochCoeff*(ι'*θ*model.κ + model.κ'*θ*ι)) .* transpose(F2)) - tr(V) - model.StochCoeff*dot(model.θ,Jtilde)
-                    + model.StochCoeff*dot(model.y[model.MBIndices],ι*model.μ))
-            end)
-end
+# """Return a function computing the gradient of the ELBO given the kernel hyperparameters for a HGP Model"""
+# function hyperparameter_gradient_function(model::SparseHGP)
+#     F2 = Symmetric(model.μ*transpose(model.μ) + model.Σ)
+#     θ = Diagonal(model.θ)
+#     return (function(Jmm,Jnm,Jnn)
+#                 ι = (Jnm-model.κ*Jmm)*model.invKmm
+#                 Jtilde = Jnn - sum(ι.*model.Knm,dims=2)[:] - sum(model.κ.*Jnm,dims=2)[:]
+#                 V = model.invKmm*Jmm
+#                 return 0.5*(sum( (V*model.invKmm - model.StochCoeff*(ι'*θ*model.κ + model.κ'*θ*ι)) .* transpose(F2)) - tr(V) - model.StochCoeff*dot(model.θ,Jtilde)
+#                     + model.StochCoeff*dot(model.y[model.MBIndices],ι*model.μ))
+#             end,
+#             function(kernel)
+#                 return  0.5/(getvariance(kernel))*(sum(model.invKmm.*F2)-model.StochCoeff*dot(model.θ,model.Ktilde)-model.m)
+#             end,
+#             function()
+#                 ι = -model.κ*model.invKmm
+#                 Jtilde = ones(Float64,model.nSamplesUsed) - sum(ι.*model.Knm,dims=2)[:]
+#                 V = model.invKmm
+#                 return 0.5*(sum( (V*model.invKmm - model.StochCoeff*(ι'*θ*model.κ + model.κ'*θ*ι)) .* transpose(F2)) - tr(V) - model.StochCoeff*dot(model.θ,Jtilde)
+#                     + model.StochCoeff*dot(model.y[model.MBIndices],ι*model.μ))
+#             end)
+# end
 
 # """Return a function computing the gradient of the ELBO given the inducing point locations"""
 # function inducingpoints_gradient(model::SparseHGP)
@@ -95,7 +103,7 @@ end
 #     B = model.μ*transpose(model.μ) + model.Σ
 #     Kmn = kernelmatrix(model.inducingPoints,model.X[model.MBIndices,:],model.kernel)
 #     θ = Diagonal(0.25./model.α.*tanh.(0.5*model.α))
-#     for i in 1:model.m #Iterate over the points 
+#     for i in 1:model.m #Iterate over the points
 #         Jnm,Jmm = computeIndPointsJ(model,i)
 #         for j in 1:model.nDim #Compute the gradient over the dimensions
 #             ι = (Jnm[j,:,:]-model.κ*Jmm[j,:,:])/model.Kmm

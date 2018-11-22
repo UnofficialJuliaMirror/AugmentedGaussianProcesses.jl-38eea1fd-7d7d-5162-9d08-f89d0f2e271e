@@ -14,7 +14,7 @@ function fstar(model::FullBatchModel,X_test::AbstractArray;covf::Bool=true)
         return mean_fstar
     end
     model.DownMatrixForPrediction = (model.invK*(Diagonal{Float64}(I,model.nSamples)-model.Σ*model.invK))
-    cov_fstar = kerneldiagmatrix(X_test,model.kernel) .+ getvalue(model.noise) .- sum((k_star*model.DownMatrixForPrediction).*k_star,dims=2)[:]
+    cov_fstar = kerneldiagmatrix(X_test,model.kernel) .- sum((k_star*model.DownMatrixForPrediction).*k_star,dims=2)[:]
     return mean_fstar,cov_fstar
 end
 
@@ -32,7 +32,7 @@ function fstar(model::SparseModel,X_test::AbstractArray;covf::Bool=true)
     if !covf
         return mean_fstar
     end
-    cov_fstar = kerneldiagmatrix(X_test,model.kernel) .+ getvalue(model.noise) .- sum((k_star*model.DownMatrixForPrediction).*k_star,dims=2)[:]
+    cov_fstar = kerneldiagmatrix(X_test,model.kernel) .- sum((k_star*model.DownMatrixForPrediction).*k_star,dims=2)[:]
     return mean_fstar,cov_fstar
 end
 
@@ -274,6 +274,19 @@ function studentpredictprobamc(model::GPModel,X_test::AbstractArray;nSamples=100
         mean_pred[i] = mean(temp_array); var_pred[i] = cov(temp_array)
     end
     return mean_pred,var_pred
+end
+
+function hgppredict(model,X_test)
+    return fstar(model,X_test,cov_f=false)
+end
+
+function hgppredictproba(model,X_test)
+    m_f,cov_f = fstar(model,X_test,cov_f=true)
+    k_star = kernelmatrix(X_test,model.X,model.kernel_g)
+    m_g = k_star = model.invK_g*model.μ_g
+    k_starstar = kerneldiagmatrix(X_test,model.kernel_g)
+    cov_g = k_starstar - vec(sum((k_star*(model.invK_g*(I-model.Σ_g*model.invK_g))).*k_star,dims=2))
+    return m_f,cov_f+model.α*expectation.(logit,Normal.(model.μ_g,diag(model.Σ_g)))
 end
 
 

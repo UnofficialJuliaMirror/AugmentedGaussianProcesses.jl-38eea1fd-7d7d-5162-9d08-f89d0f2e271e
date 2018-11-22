@@ -63,7 +63,7 @@ function train!(model::OfflineGPModel;iterations::Integer=0,callback=0,Convergen
     elseif isa(model,MultiClass) || isa(model,SparseMultiClass)
         model.Σ = -inv.(model.η_2).*0.5
     elseif !isa(model,BatchGPRegression)
-        model.Σ = -inv(model.η_2)*0.5;
+        # model.Σ = -inv(model.η_2)*0.5;
     end
     model.Trained = true
 end

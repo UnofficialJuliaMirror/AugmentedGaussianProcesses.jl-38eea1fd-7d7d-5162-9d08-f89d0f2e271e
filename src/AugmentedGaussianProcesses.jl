@@ -88,7 +88,7 @@ include("models/SparseGPRegression.jl")
 include("models/OnlineRegression.jl")
 include("models/BatchStudentT.jl")
 include("models/SparseStudentT.jl")
-include("models/BatchHPG.jl")
+include("models/BatchHGP.jl")
 include("models/MultiClass.jl")
 include("models/SparseMultiClass.jl")
 #Functions
@@ -101,7 +101,7 @@ include("models/BSVM_Functions.jl")
 include("models/XGPC_Functions.jl")
 include("models/Regression_Functions.jl")
 include("models/StudentT_Functions.jl")
-include("models/HPG_Functions.jl")
+include("models/HGP_Functions.jl")
 include("models/MultiClass_Functions.jl")
 
 end #End Module
