@@ -18,7 +18,6 @@ function train!(model::OfflineGPModel;iterations::Integer=0,callback=0,Convergen
         try #Allow for keyboard interruption without losing the model
             updateParameters!(model,iter) #Update all the variational parameters
             model.Trained=true
-            # println(mean(model.μ[1]))
             if model.Autotuning && (iter%model.AutotuningFrequency == 0) && iter >= 3
                 updateHyperParameters!(model) #Update the hyperparameters
             end

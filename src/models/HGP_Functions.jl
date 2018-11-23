@@ -1,14 +1,14 @@
 # Functions related to the Student T likelihood (HGP)
 """Update the local variational parameters of the full batch GP HGP"""
 function local_update!(model::BatchHGP)
-    model.λ = 0.5*((model.μ-model.y).^2+diag(model.Σ))
-    model.c = sqrt.(diag(model.Σ_g)+model.μ_g.^2)
+    model.λ = 0.5*((model.μ-model.y).^2 + diag(model.Σ))
+    model.c = sqrt.(model.μ_g.^2+diag(model.Σ_g))
     model.γ = 0.5*model.α*model.λ./cosh.(0.5*model.c).*exp.(-0.5*model.μ_g)
     model.θ = 0.5.*(model.γ.+1.0)./model.c.*tanh.(0.5*model.c)
-    model.K_g = Symmetric(kernelmatrix(model.X,model.kernel_g)+jittering*I)
+    model.K_g = Symmetric(kernelmatrix(model.X,model.kernel_g)+getvariance(model.kernel_g)*jittering*I)
     model.invK_g = inv(model.K_g)
     model.Σ_g = Symmetric(inv(Diagonal(model.θ)+model.invK_g))
-    model.μ_g = 0.5*model.α*model.Σ_g*(1.0.-model.γ)
+    model.μ_g = 0.5*model.Σ_g*(1.0.-model.γ)+model.μ_0
 end
 
 # """Update the local variational parameters of the sparse GP HGP"""
@@ -22,7 +22,7 @@ end
 function natural_gradient(model::BatchHGP)
     expec = expectation.(logit,Normal.(model.μ_g,diag(model.Σ_g)))
     model.η_1 = 0.5*model.α*expec.*model.y
-    model.η_2 = Symmetric(-0.5*(Diagonal{Float64}(expec) + model.invK))
+    model.η_2 = Symmetric(-0.5*(model.α*Diagonal{Float64}(expec) + model.invK))
 end
 
 # """Return the natural gradients of the ELBO given the natural parameters"""
