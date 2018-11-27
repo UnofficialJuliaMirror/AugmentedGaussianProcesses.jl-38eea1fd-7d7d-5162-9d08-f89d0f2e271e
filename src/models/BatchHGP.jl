@@ -22,8 +22,8 @@ mutable struct BatchHGP <: FullBatchModel
                                     kernel=0,noise::Real=1e-3,AutotuningFrequency::Integer=1,
                                     ϵ::Real=1e-5,μ_init::Array{Float64,1}=[0.0],verbose::Integer=0,α::Real=5.0,kernel_g=0,μ_0=0)
             this = new()
-            this.ModelType = StudentT
-            this.Name = "Non Sparse GP Regression with Student-T Likelihood"
+            this.ModelType = HGP
+            this.Name = "Non Sparse GP Regression with Heteroscedastic noise"
             initCommon!(this,X,y,noise,ϵ,nEpochs,verbose,Autotuning,AutotuningFrequency,optimizer);
             initFunctions!(this);
             initKernel!(this,kernel);
@@ -34,10 +34,10 @@ mutable struct BatchHGP <: FullBatchModel
             this.γ = zero(this.λ)
             this.θ = zero(this.λ)
             this.kernel_g = deepcopy(kernel_g)
-            this.K_g = Symmetric(kernelmatrix(this.X,this.kernel_g)+jittering*I)
+            this.K_g = Symmetric(kernelmatrix(this.X,this.kernel_g)+getvariance(kernel_g)*jittering*I)
             this.invK_g = inv(this.K_g)
             this.μ_0 = μ_0*ones(this.nSamples)
-            this.μ_g = rand(MvNormal(this.μ_0,this.K_g))
+            this.μ_g = copy(this.μ_0)
             this.Σ_g = copy(this.K_g)
             return this;
     end

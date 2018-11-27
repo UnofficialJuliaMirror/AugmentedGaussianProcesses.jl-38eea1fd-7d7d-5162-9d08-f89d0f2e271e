@@ -277,10 +277,10 @@ function studentpredictprobamc(model::GPModel,X_test::AbstractArray;nSamples=100
 end
 
 function hgppredict(model,X_test)
-    return fstar(model,X_test,cov_f=false)
+    return fstar(model,X_test,covf=false)
 end
 
-function noisepredict(model,X_test,covf=true)
+function noisepredict(model,X_test;covf=true)
     k_star = kernelmatrix(X_test,model.X,model.kernel_g)
     m_g = k_star*model.invK_g*model.μ_g.+model.μ_0[1]
     k_starstar = kerneldiagmatrix(X_test,model.kernel_g)
@@ -289,9 +289,9 @@ function noisepredict(model,X_test,covf=true)
 end
 
 function hgppredictproba(model,X_test)
-    m_f,cov_f = fstar(model,X_test,cov_f=true)
-    m_g,cov_g = noisepredict(model,X_test,cov_f=true)
-    return m_f,cov_f+model.α*expectation.(logit,Normal.(model.m_g,model.cov_g))
+    m_f,cov_f = fstar(model,X_test,covf=true)
+    m_g,cov_g = noisepredict(model,X_test,covf=true)
+    return m_f,cov_f+model.α*expectation.(logit,Normal.(m_g,cov_g))
 end
 
 

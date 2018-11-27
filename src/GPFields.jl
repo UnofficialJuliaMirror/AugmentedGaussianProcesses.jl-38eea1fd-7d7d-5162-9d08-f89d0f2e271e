@@ -269,7 +269,7 @@ function initFunctions!(model::GPModel)
             regpredictproba(model,X_test)
         elseif model.ModelType == StudentT
             studenttpredictproba(model,X_test)
-        elseif model.ModelType == HPG
+        elseif model.ModelType == HGP
             hgppredictproba(model,X_test)
         elseif typeof(model) <: MultiClassGPModel
             multiclasspredictproba(model,X_test)

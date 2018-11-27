@@ -3,12 +3,12 @@
 function local_update!(model::BatchHGP)
     model.λ = 0.5*((model.μ-model.y).^2 + diag(model.Σ))
     model.c = sqrt.(model.μ_g.^2+diag(model.Σ_g))
-    model.γ = 0.5*model.α*model.λ./cosh.(0.5*model.c).*exp.(-0.5*model.μ_g)
-    model.θ = 0.5.*(model.γ.+1.0)./model.c.*tanh.(0.5*model.c)
+    model.γ = 0.5 .* model.α*model.λ ./ cosh.(0.5*model.c) .* exp.(-0.5*model.μ_g)
+    model.θ = 0.5 .* (model.γ.+1.0) ./ model.c .* tanh.(0.5*model.c)
     model.K_g = Symmetric(kernelmatrix(model.X,model.kernel_g)+getvariance(model.kernel_g)*jittering*I)
     model.invK_g = inv(model.K_g)
     model.Σ_g = Symmetric(inv(Diagonal(model.θ)+model.invK_g))
-    model.μ_g = 0.5*model.Σ_g*(1.0.-model.γ)+model.μ_0
+    model.μ_g = model.Σ_g*(0.5*(1.0.-model.γ)+model.invK_g*model.μ_0)
 end
 
 # """Update the local variational parameters of the sparse GP HGP"""
@@ -36,26 +36,19 @@ end
 """Compute the negative ELBO for the full batch HGP Model"""
 function ELBO(model::BatchHGP)
     ELBO_v = 0.0
-    # ELBO_v = ExpecLogLikelihood(model)
+    ELBO_v = ExpecLogLikelihood(model)
     ELBO_v += -GaussianKL(model)
-    # ELBO_v += -InverseGammaKL(model)
+    ELBO_v += -GaussianGKL(model)
+    ELBO_v += -PoissonKL(model)
+    ELBO_v += -PolyaGammaKL(model)
     return -ELBO_v
 end
 
-#
-# """Compute the negative ELBO for the sparse HGP Model"""
-# function ELBO(model::SparseHGP)
-#     ELBO_v = model.StochCoeff*ExpecLogLikelihood(model)
-#     ELBO_v += -GaussianKL(model)
-#     ELBO_v += -model.StochCoeff*InverseGammaKL(model)
-#     return -ELBO_v
-# end
-
 """Return the expected log likelihood for the batch HGP Model"""
 function ExpecLogLikelihood(model::BatchHGP)
-    tot = -0.5*model.nSamples*log(2*π)
-    tot -= 0.5.*(sum(log.(model.β))-model.nSamples*digamma(model.α))
-    tot -= 0.5.*sum(model.α./model.β.*(diag(model.Σ)+model.μ.^2-2*model.μ.*model.y-model.y.^2))
+    tot = -sum(1.0.+model.γ)*log(2)
+    tot += 0.5*sum((1.0.-model.γ).*model.μ_g)
+    tot += -0.5.*sum((model.c.^2).*model.θ)
     return tot
 end
 
@@ -67,13 +60,18 @@ end
 #     return tot
 # end
 
-# """Return the KL divergence for the inverse gamma distributions"""
-# function InverseGammaKL(model::GPModel)
-#     α_p = β_p = model.ν/2;
-#     return (α_p.-model.α)*digamma(α_p).-log(gamma(α_p)).+log(gamma(model.α))
-#             .+ model.α*(log(β_p).-log.(model.β)).+α_p.*(model.β.-β_p)./β_p
-# end
+"""Return the KL divergence for the Poisson distributions"""
+function PoissonKL(model::BatchHGP)
+    return sum(model.γ.*(log.(model.γ).-1.0 - log.(model.λ)) + model.λ)
+end
 
+function GaussianGKL(model::BatchHGP)
+    return 0.5*(sum(model.invK_g.*(model.Σ_g+(model.μ_g-model.μ_0)*transpose(model.μ_g-model.μ_0)))-model.nSamples-logdet(model.Σ_g)-logdet(model.invK_g))
+end
+
+function PolyaGammaKL(model::BatchHGP)
+    return sum((1.0.+model.γ).*log.(cosh.(0.5*model.c))-0.5*(model.c.^2).*model.θ)
+end
 # """Return a function computing the gradient of the ELBO given the kernel hyperparameters for a HGP Model"""
 # function hyperparameter_gradient_function(model::SparseHGP)
 #     F2 = Symmetric(model.μ*transpose(model.μ) + model.Σ)
