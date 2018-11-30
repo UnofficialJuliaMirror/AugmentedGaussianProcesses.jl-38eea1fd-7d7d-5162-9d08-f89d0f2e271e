@@ -282,7 +282,7 @@ end
 
 function noisepredict(model,X_test;covf=true)
     k_star = kernelmatrix(X_test,model.X,model.kernel_g)
-    m_g = k_star*model.invK_g*model.μ_g.+model.μ_0[1]
+    m_g = k_star*model.invK_g*model.μ_g
     k_starstar = kerneldiagmatrix(X_test,model.kernel_g)
     cov_g = k_starstar - vec(sum((k_star*(model.invK_g*(I-model.Σ_g*model.invK_g))).*k_star,dims=2))
     return m_g,cov_g
@@ -291,7 +291,7 @@ end
 function hgppredictproba(model,X_test)
     m_f,cov_f = fstar(model,X_test,covf=true)
     m_g,cov_g = noisepredict(model,X_test,covf=true)
-    return m_f,cov_f+model.α*expectation.(logit,Normal.(m_g,cov_g))
+    return m_f,cov_f + 1.0./(model.α*expectation.(logit,Normal.(m_g,cov_g)))
 end
 
 

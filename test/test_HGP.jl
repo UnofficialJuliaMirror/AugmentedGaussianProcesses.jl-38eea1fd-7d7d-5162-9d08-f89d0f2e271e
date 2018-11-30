@@ -14,7 +14,7 @@ if doPlots
     using Plots
     pyplot()
 end
-N_data = 1000
+N_data = 100
 N_test = 100
 N_dim = 1
 noise = 1e-16
@@ -36,7 +36,8 @@ x_test = range(minx,stop=maxx,length=N_test)
 X_tot = vcat(X,x_test)
 y_m = rand(MvNormal(zeros(N_data+N_test),kernelmatrix(X_tot,kernel)+1e-5*I))
 y_noise = rand(MvNormal(μ_0*ones(N_data+N_test),kernelmatrix(X_tot,kernel_g)+1e-5I))
-y = y_m .+ rand.(Normal.(0,h.(y_noise)))
+h_noise = 1.0./sqrt.(h.(y_noise))
+y = y_m .+ rand.(Normal.(0,h_noise))
 scatter(X_tot,y_m)
 scatter!(X_tot,y_noise)
 display(scatter!(X_tot,y))
@@ -69,7 +70,7 @@ function callback(model,iter)
     pγ = plot(X[s],model.γ[s],lab="γ")
     pc = plot(X[s],model.c[s],lab="c")
     psig = plot(X[s],diag(model.Σ_g)[s],lab="Σ")
-    model.μ = copy(y_m[1:model.nSamples])
+    # model.μ = copy(y_m[1:model.nSamples])
     display(plot(pg,psig,pl,pθ,pγ,pc))
     sleep(0.1)
 end
@@ -77,8 +78,8 @@ end
 # if fullm
 println("Testing the full model")
 t_full = @elapsed global model = AugmentedGaussianProcesses.BatchHGP(X,y,noise=noise,kernel=kernel,verbose=verbose,Autotuning=autotuning,α=α,kernel_g=kernel_g,μ_0=μ_0)
-model.μ = copy(y_m[1:model.nSamples])
-t_full += @elapsed model.train(iterations=10,callback=callback)
+# model.μ = copy(y_m[1:model.nSamples])
+t_full += @elapsed model.train(iterations=20,callback=callback)
 global y_full,sig_full = model.predictproba(X_test); rmse_full = rmse(y_full,y_test);
 global y_fullg, sig_fullg = AugmentedGaussianProcesses.noisepredict(model,X_test)
 if doPlots
@@ -123,7 +124,7 @@ t_stoch != 0 ? println("Stoch. Sparse model : RMSE=$(rmse_stoch), time=$t_stoch"
 if doPlots
     y_nonoise = y_m[N_data+1:end]
     y_gnoise = y_noise[N_data+1:end]
-    noise_ytest = h.(y_noise[N_data+1:end])
+    noise_ytest = h_noise[N_data+1:end]
     ptrue=plot(X,y,t=:scatter,lab="Training points")
     plot!(ptrue,x_test,y_test,t=:scatter,lab="Test points",title="Truth")
     plot!(ptrue,x_test,y_nonoise,ylim=(miny,maxy),lab="Noiseless")

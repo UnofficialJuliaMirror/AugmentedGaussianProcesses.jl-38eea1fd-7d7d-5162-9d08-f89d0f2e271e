@@ -20,7 +20,7 @@ end
 
 """Return the natural gradients of the ELBO given the natural parameters"""
 function natural_gradient(model::BatchHGP)
-    expec = expectation.(logit,Normal.(model.μ_g,diag(model.Σ_g)))
+    expec = expectation.(logit,Normal.(model.μ_g,sqrt.(diag(model.Σ_g))))
     model.η_1 = 0.5*model.α*expec.*model.y
     model.η_2 = Symmetric(-0.5*(model.α*Diagonal{Float64}(expec) + model.invK))
 end
